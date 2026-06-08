@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "comfyui-imagent"
+dynamic = ["version"]
+description = "ComfyUI nodes for OpenAI gpt-image generation and editing"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "ComfyUI-Imagent contributors" }]
+keywords = ["comfyui", "openai", "gpt-image", "image-generation"]
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = ["openai>=1.40.0", "Pillow>=10.0", "numpy"]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0", "torch"]
+
+[project.urls]
+Repository = "https://github.com/agarzon/ComfyUI-Imagent"
+
+# ComfyUI Registry metadata (used by `comfy node publish`).
+[tool.comfy]
+PublisherId = "agarzon"
+DisplayName = "Imagent"
+requires-comfyui = ">=0.23.0"
+Icon = "https://raw.githubusercontent.com/agarzon/ComfyUI-Imagent/main/assets/icon.png"
+Banner = "https://raw.githubusercontent.com/agarzon/ComfyUI-Imagent/main/assets/banner.png"
+
+[tool.comfy.version]
+# version is dynamic (imagent.__version__); comfy-cli reads it from this source file
+path = "imagent/__init__.py"
+
+[tool.setuptools.dynamic]
+version = { attr = "imagent.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["imagent*"]
+exclude = ["tests*", "docker*", "docs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--import-mode=importlib"
+xfail_strict = true

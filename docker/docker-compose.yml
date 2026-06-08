@@ -1,0 +1,26 @@
+services:
+  comfyui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Override with `docker compose build --build-arg COMFYUI_REF=v0.3.27`
+        COMFYUI_REF: master
+    image: comfyui-imagent-dev:latest
+    container_name: comfyui-imagent-dev
+    ports:
+      - "8188:8188"
+    environment:
+      # Checked before config.json by imagent/client.py. Set OPENAI_API_KEY in
+      # your shell before `up`, or it passes through empty.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      # The node under development: bind-mount the repo into custom_nodes so
+      # edits reload on container restart.
+      - ../:/opt/ComfyUI/custom_nodes/comfyui-imagent:rw
+      # Persistent ComfyUI user dir.
+      - comfyui_user:/opt/ComfyUI/user
+    restart: unless-stopped
+
+volumes:
+  comfyui_user:
