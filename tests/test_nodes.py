@@ -70,11 +70,25 @@ def test_generate_drops_transparent_background_for_gpt_image_2(monkeypatch):
     assert rec["generate"]["background"] == "auto"   # gpt-image-2 can't do transparent
 
 
-def test_generate_keeps_transparent_background_for_gpt_image_1(monkeypatch):
+def test_generate_extended_quality_gated_to_gpt_image_25(monkeypatch):
     rec = {}
     monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
     run_generate(
-        prompt="x", model="gpt-image-1", size="auto", quality="auto",
+        prompt="x", model="gpt-image-2.5-sunburst", size="auto", quality="max",
+        background="auto", output_format="png", n=1)
+    assert rec["generate"]["quality"] == "max"
+    rec.clear()
+    run_generate(
+        prompt="x", model="gpt-image-2", size="auto", quality="max",
+        background="auto", output_format="png", n=1)
+    assert rec["generate"]["quality"] == "high"
+
+
+def test_generate_keeps_transparent_background_for_gpt_image_25(monkeypatch):
+    rec = {}
+    monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
+    run_generate(
+        prompt="x", model="gpt-image-2.5-flare", size="auto", quality="auto",
         background="transparent", output_format="png", n=1)
     assert rec["generate"]["background"] == "transparent"
 
@@ -144,20 +158,6 @@ def test_generate_custom_dimensions_for_gpt_image_2(monkeypatch):
     assert rec["generate"]["size"] == "2048x1152"
 
 
-def test_generate_hires_preset_gated_to_gpt_image_2(monkeypatch):
-    rec = {}
-    monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
-    run_generate(
-        prompt="x", model="gpt-image-1", size="2048x2048", quality="auto",
-        background="auto", output_format="png", n=1)
-    assert rec["generate"]["size"] == "auto"          # gpt-image-1 can't do hi-res
-    rec.clear()
-    run_generate(
-        prompt="x", model="gpt-image-2", size="2048x2048", quality="auto",
-        background="auto", output_format="png", n=1)
-    assert rec["generate"]["size"] == "2048x2048"
-
-
 # ---------------------------------------------------------------------------
 # OpenAIImageEdit tests
 # ---------------------------------------------------------------------------
@@ -192,22 +192,6 @@ def test_edit_includes_mask_when_provided(monkeypatch):
         background="auto", output_format="png", n=1,
         images=[_img_tensor()], mask=mask)
     assert "mask" in rec["edit"]
-
-
-def test_edit_input_fidelity_only_for_1x(monkeypatch):
-    rec = {}
-    monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
-    run_edit(
-        prompt="x", model="gpt-image-1", size="auto", quality="auto",
-        background="auto", output_format="png", n=1,
-        images=[_img_tensor()], input_fidelity="high")
-    assert rec["edit"]["input_fidelity"] == "high"
-    rec.clear()
-    run_edit(
-        prompt="x", model="gpt-image-2", size="auto", quality="auto",
-        background="auto", output_format="png", n=1,
-        images=[_img_tensor()], input_fidelity="high")
-    assert "input_fidelity" not in rec["edit"]
 
 
 def test_edit_moderation_only_when_not_auto(monkeypatch):
@@ -269,6 +253,20 @@ def test_edit_mask_with_multiple_refs_returns_error(monkeypatch):
         images=[_img_tensor(), _img_tensor()], mask=mask)
     assert img.shape == (1, 512, 512, 3)
     assert info.startswith("Error")
+
+
+def test_model_widget_matches_catalog_and_gpt_image_25_options():
+    import pytest
+    pytest.importorskip("comfy_api")
+    from imagent.node_edit import OpenAIImageEdit
+    from imagent.node_generate import OpenAIImageGenerate
+    for node in (OpenAIImageGenerate, OpenAIImageEdit):
+        model_input = next(i for i in node.define_schema().inputs if i.id == "model")
+        assert [o.key for o in model_input.options] == client.MODELS
+        for key in ("gpt-image-2.5-flare", "gpt-image-2.5-sunburst"):
+            subs = {i.id: i for i in next(o for o in model_input.options if o.key == key).inputs}
+            assert "transparent" in subs["background"].options
+            assert "custom" in [o.key for o in subs["size"].options]
 
 
 def test_extension_registers_both_nodes():

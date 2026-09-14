@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **gpt-image-2.5** — `gpt-image-2.5-flare` (new default) and `gpt-image-2.5-sunburst`, with
+  custom `WxH` sizes, `transparent` background, and the new `xhigh` / `max` quality tiers.
+  gpt-image-2 falls back to `high` when an extended tier is selected.
+
+### Removed
+
+- **gpt-image-1 and gpt-image-1.5** — OpenAI shuts them down on 2026-10-23 and 2026-12-01
+  respectively. **Saved workflows that select either model will need their `model` widget
+  re-picked.**
+- **`input_fidelity`** — it only ever applied to gpt-image-1.x; gpt-image-2 and 2.5 always use
+  high input fidelity and error if the parameter is sent. The widget is gone from the edit node
+  and the parameter is no longer part of `build.run_edit()`.
+
 ## v0.1.0 — 2026-06-08
 
 First public release.

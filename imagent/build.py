@@ -43,11 +43,11 @@ def run_generate(*, prompt, model, size, quality, background, output_format, n,
         log.warning("imagent: %s", _NO_KEY)
         return (image_io.empty_image(), _NO_KEY)
     try:
-        resolved_size = params_mod.resolve_size(size, custom_width, custom_height, model)
+        resolved_size = params_mod.resolve_size(size, custom_width, custom_height)
         resolved_background = params_mod.resolve_background(background, model)
         kwargs = {
             "model": model, "prompt": prompt, "n": n,
-            "size": resolved_size, "quality": quality,
+            "size": resolved_size, "quality": params_mod.resolve_quality(quality, model),
             "background": resolved_background, "output_format": output_format,
         }
         if output_format in ("jpeg", "webp"):
@@ -66,7 +66,7 @@ def run_generate(*, prompt, model, size, quality, background, output_format, n,
 
 
 def run_edit(*, prompt, model, size, quality, background, output_format, n,
-             images, mask=None, input_fidelity="high", moderation="auto",
+             images, mask=None, moderation="auto",
              custom_width=1024, custom_height=1024):
     """Image edit / inpaint / multi-reference via images.edit.
 
@@ -91,9 +91,8 @@ def run_edit(*, prompt, model, size, quality, background, output_format, n,
         return (image_io.empty_image(), msg)
 
     try:
-        resolved_size = params_mod.resolve_size(size, custom_width, custom_height, model)
+        resolved_size = params_mod.resolve_size(size, custom_width, custom_height)
         resolved_background = params_mod.resolve_background(background, model)
-        caps = params_mod.capabilities_for(model)
         # Downscale oversized references to fit the API's input pixel budget.
         ref_pils = [image_io.downscale_pil_to_pixel_limit(image_io.tensor_to_pil(t)[0])
                     for t in refs]
@@ -101,13 +100,12 @@ def run_edit(*, prompt, model, size, quality, background, output_format, n,
         kwargs = {
             "model": model, "prompt": prompt,
             "image": [_named_png(p, f"ref_{i}.png") for i, p in enumerate(ref_pils)],
-            "n": n, "size": resolved_size, "quality": quality,
+            "n": n, "size": resolved_size,
+            "quality": params_mod.resolve_quality(quality, model),
             "background": resolved_background, "output_format": output_format,
         }
         if mask is not None:
             kwargs["mask"] = image_io.mask_to_named_png(ref_pils[0], mask, "mask.png")
-        if caps["input_fidelity"]:
-            kwargs["input_fidelity"] = input_fidelity
         if moderation != "auto":
             kwargs["moderation"] = moderation
         resp = oai.images.edit(**kwargs)

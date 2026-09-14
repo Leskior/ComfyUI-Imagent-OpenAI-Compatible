@@ -32,10 +32,15 @@ def test_placeholder_key_is_ignored(monkeypatch, tmp_path):
 
 
 def test_model_catalog_defaults():
-    assert client.DEFAULT_MODEL == "gpt-image-2"
-    assert set(client.MODELS) == {"gpt-image-1", "gpt-image-1.5", "gpt-image-2"}
+    assert client.DEFAULT_MODEL == "gpt-image-2.5-flare"
+    assert set(client.MODELS) == {"gpt-image-2", "gpt-image-2.5-flare",
+                                  "gpt-image-2.5-sunburst"}
     assert "gpt-image-1-mini" not in client.MODELS
     assert "gpt-image-2-2026-04-21" not in client.MODELS
+    assert "gpt-image-2.5-flare-2026-09-08" not in client.MODELS
+    # Retired: both shut down before this release's models do.
+    assert "gpt-image-1" not in client.MODELS
+    assert "gpt-image-1.5" not in client.MODELS
     assert all("dall-e" not in m for m in client.MODELS)
 
 

@@ -20,7 +20,7 @@
 ## ✨ Features
 
 - 🖼️ **Two nodes** — **Imagent: OpenAI Image** (text-to-image) and **Imagent: OpenAI Image Edit** (edit, inpaint, multi-reference compose).
-- 🤖 **Current gpt-image models** — `gpt-image-2`, `gpt-image-1.5`, `gpt-image-1`.
+- 🤖 **Current gpt-image models** — `gpt-image-2.5-flare`, `gpt-image-2.5-sunburst`, `gpt-image-2`.
 - ✍️ **Text-to-image** with full control over size, quality, background, and output format.
 - 🎨 **Edit + inpaint (mask)** — supply a mask to repaint a specific region; white pixels mark the area to edit.
 - 🔗 **Multi-reference compositing** — feed up to 16 reference images to the edit node (auto-growing input).
@@ -63,11 +63,11 @@ Text-to-image generation via `images.generate`.
 | Parameter | Type | Values / Notes |
 |---|---|---|
 | `prompt` | STRING | Text description of the image to generate |
-| `model` | **DynamicCombo** | `gpt-image-2` (default), `gpt-image-1.5`, `gpt-image-1`. Switching the model swaps the options below. |
-| ↳ `size` | COMBO | **gpt-image-2:** `auto`, the three base sizes, five high-res presets, and `custom`. **gpt-image-1.x:** `auto` + the three base sizes only. |
+| `model` | **DynamicCombo** | `gpt-image-2.5-flare` (default), `gpt-image-2.5-sunburst`, `gpt-image-2`. Switching the model swaps the options below. |
+| ↳ `size` | COMBO | `auto`, the three base sizes, five high-res presets, and `custom`. |
 | ↳↳ `custom_width` / `custom_height` | INT | **Appear only when `size = custom`.** 1024–3840, step 16; both multiples of 16; aspect ≤ 3:1; total pixels 655,360–8,294,400. |
-| ↳ `background` | COMBO | **gpt-image-2:** `auto`, `opaque`. **gpt-image-1.x:** `auto`, `opaque`, `transparent` (needs `png`/`webp`). |
-| `quality` | COMBO | `auto`, `low`, `medium`, `high` |
+| ↳ `background` | COMBO | **gpt-image-2.5:** `auto`, `opaque`, `transparent` (needs `png`/`webp`). **gpt-image-2:** `auto`, `opaque`. |
+| `quality` | COMBO | `auto`, `low`, `medium`, `high`, plus `xhigh` / `max` on gpt-image-2.5 (other models fall back to `high`). |
 | `output_format` | COMBO | `png`, `jpeg`, `webp` |
 | `output_compression` | INT | 0–100. Applied only for `jpeg` and `webp`. |
 | `moderation` | COMBO | `auto` (default), `low`. Sent only when not `auto`. |
@@ -89,18 +89,19 @@ Image editing, inpainting, and multi-reference compositing via `images.edit`.
 |---|---|---|
 | `prompt` | STRING | Description of the desired edit |
 | `model` | **DynamicCombo** | Same three models; switching swaps the options below. |
-| ↳ `size` | COMBO | Same as the generate node (hi-res + `custom` on gpt-image-2; base sizes on gpt-image-1.x). |
-| ↳↳ `custom_width` / `custom_height` | INT | **Appear only when `size = custom`** (gpt-image-2). Same rules as the generate node. |
-| ↳ `background` | COMBO | gpt-image-2: `auto`/`opaque`; gpt-image-1.x: adds `transparent`. |
-| ↳ `input_fidelity` | COMBO | **gpt-image-1.x only.** `high` (default) or `low` — how closely to follow the reference image. |
+| ↳ `size` | COMBO | Same as the generate node. |
+| ↳↳ `custom_width` / `custom_height` | INT | **Appear only when `size = custom`.** Same rules as the generate node. |
+| ↳ `background` | COMBO | gpt-image-2.5: `auto`/`opaque`/`transparent`; gpt-image-2: `auto`/`opaque`. |
 | `images` | IMAGE (auto-grow) | Reference image(s) to edit — grows up to **16** slots; at least one required. |
-| `quality` | COMBO | `auto`, `low`, `medium`, `high` |
+| `quality` | COMBO | `auto`, `low`, `medium`, `high`, plus `xhigh` / `max` on gpt-image-2.5. |
 | `output_format` | COMBO | `png`, `jpeg`, `webp` |
 | `moderation` | COMBO | `auto` (default), `low` |
 | `n` | INT | 1–8 images per call |
 | `mask` *(optional)* | MASK | **White = region to edit.** Inpainting requires exactly one reference image. |
 
 Rows marked ↳ live inside the dynamic `model` widget; ↳↳ rows appear only when their parent option is selected.
+
+> No `input_fidelity` widget: every model shipped here always uses high input fidelity, and passing the parameter is an error. It only applied to the retired gpt-image-1.x models.
 
 **Output:** `image` (IMAGE tensor, batch of n). Errors are logged to the ComfyUI console.
 
