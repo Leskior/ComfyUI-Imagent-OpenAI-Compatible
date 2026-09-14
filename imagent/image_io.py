@@ -1,9 +1,8 @@
 """Conversions between ComfyUI tensors, PIL images, masks, and base64 payloads.
 
-Public helpers: pil_to_tensor, tensor_to_pil, b64_to_tensor, empty_image,
-pil_to_png_bytes, mask_to_alpha_png_bytes, mask_to_named_png,
-downscale_pil_to_pixel_limit, url_to_tensor, response_item_to_tensor,
-batch_from_response_data.
+Public helpers: pil_to_tensor, pil_to_image_and_mask, tensor_to_pil, empty_image,
+empty_mask, pil_to_png_bytes, mask_to_alpha_png_bytes, mask_to_named_png,
+downscale_pil_to_pixel_limit, response_item_to_pil, batch_from_response_data.
 """
 from __future__ import annotations
 
@@ -33,16 +32,29 @@ def tensor_to_pil(image_tensor: torch.Tensor) -> list[Image.Image]:
     return out
 
 
-def b64_to_tensor(b64_str: str) -> torch.Tensor:
-    """Base64 PNG/JPEG/WebP -> [1, H, W, 3] float32 tensor."""
-    data = base64.b64decode(b64_str)
-    pil = Image.open(io.BytesIO(data))
-    return pil_to_tensor(pil)
+def pil_to_image_and_mask(pil_image: Image.Image) -> tuple[torch.Tensor, torch.Tensor]:
+    """PIL image -> (IMAGE [1, H, W, 3], MASK [1, H, W]).
+
+    Alpha is carried out as a MASK because ComfyUI IMAGE is RGB-only: following
+    the LoadImage convention, mask = 1 - alpha, so a transparent region reads as
+    selected (1.0). Images without an alpha channel yield an all-zero mask.
+    """
+    if "A" in pil_image.getbands():
+        alpha = np.array(pil_image.getchannel("A")).astype(np.float32) / 255.0
+        mask = 1.0 - torch.from_numpy(alpha)[None, ]
+    else:
+        mask = empty_mask(pil_image.height, pil_image.width)
+    return pil_to_tensor(pil_image), mask
 
 
 def empty_image(height: int = 512, width: int = 512) -> torch.Tensor:
     """Black RGB placeholder tensor for error returns."""
     return torch.zeros((1, height, width, 3), dtype=torch.float32)
+
+
+def empty_mask(height: int = 512, width: int = 512) -> torch.Tensor:
+    """All-zero (fully opaque) MASK tensor."""
+    return torch.zeros((1, height, width), dtype=torch.float32)
 
 
 def pil_to_png_bytes(pil_image: Image.Image) -> bytes:
@@ -96,27 +108,23 @@ def downscale_pil_to_pixel_limit(pil_image: Image.Image,
     return pil_image.resize((max(1, int(w * scale)), max(1, int(h * scale))))
 
 
-def url_to_tensor(url: str) -> torch.Tensor:
-    """Download an image URL and convert it to a [1, H, W, 3] tensor."""
-    import urllib.request
-    with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 - caller owns URL provenance
-        data = resp.read()
-    return pil_to_tensor(Image.open(io.BytesIO(data)))
-
-
-def response_item_to_tensor(item) -> torch.Tensor:
-    """Convert an OpenAI image response item (b64_json or url) to a tensor."""
+def response_item_to_pil(item) -> Image.Image:
+    """Decode an OpenAI image response item (b64_json or url) to a PIL image."""
     b64 = getattr(item, "b64_json", None)
     if b64:
-        return b64_to_tensor(b64)
+        return Image.open(io.BytesIO(base64.b64decode(b64)))
     url = getattr(item, "url", None)
     if url:
-        return url_to_tensor(url)
+        import urllib.request
+        with urllib.request.urlopen(url, timeout=30) as resp:  # noqa: S310 - caller owns URL provenance
+            return Image.open(io.BytesIO(resp.read()))
     raise ValueError("response item has neither b64_json nor url")
 
 
-def batch_from_response_data(data: list) -> torch.Tensor:
-    """OpenAI response `.data` list -> [B, H, W, 3] batch tensor (b64 or url items)."""
+def batch_from_response_data(data: list) -> tuple[torch.Tensor, torch.Tensor]:
+    """OpenAI response `.data` list -> ([B, H, W, 3] IMAGE, [B, H, W] MASK) batches."""
     if not data:
         raise ValueError("data must contain at least one response item")
-    return torch.cat([response_item_to_tensor(d) for d in data], dim=0)
+    pairs = [pil_to_image_and_mask(response_item_to_pil(d)) for d in data]
+    return (torch.cat([img for img, _ in pairs], dim=0),
+            torch.cat([mask for _, mask in pairs], dim=0))

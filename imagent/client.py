@@ -19,15 +19,14 @@ log = logging.getLogger("imagent")
 # config.json lives at the repo root, next to this package directory.
 _CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
-# Current OpenAI image models, verified 2026-06-07. Curated to the three current
-# GPT image generations (1, 1.5, 2); dated snapshots and -mini are intentionally
-# omitted. DALL-E excluded (shut down 2026-05-12).
+# Current OpenAI image models, verified 2026-09-13. Dated snapshots, -mini and
+# models with an announced shutdown date are intentionally omitted.
 MODELS = [
+    "gpt-image-2.5-flare",
+    "gpt-image-2.5-sunburst",
     "gpt-image-2",
-    "gpt-image-1.5",
-    "gpt-image-1",
 ]
-DEFAULT_MODEL = "gpt-image-2"
+DEFAULT_MODEL = "gpt-image-2.5-flare"
 
 _PLACEHOLDERS = {"", "sk-...", "your_openai_api_key_here"}
 

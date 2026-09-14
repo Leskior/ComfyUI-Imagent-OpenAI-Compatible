@@ -9,22 +9,9 @@ from comfy_api.latest import IO
 
 from . import build
 from . import params as params_mod
-from .node_generate import _gpt_image_2_inputs, unpack_size
+from .node_generate import _gpt_image_2_inputs, _gpt_image_25_inputs, unpack_size
 
 _MAX_REFS = 16
-
-
-def _legacy_edit_inputs():
-    """gpt-image-1 / gpt-image-1.5: base sizes, transparent allowed, input_fidelity."""
-    return [
-        IO.Combo.Input("size", options=params_mod.SIZES_BASE, default="auto",
-                       tooltip="Output size (base sizes supported by gpt-image-1.x)."),
-        IO.Combo.Input("background", options=params_mod.BACKGROUNDS, default="auto",
-                       tooltip="Background handling. 'transparent' needs png or webp output."),
-        IO.Combo.Input("input_fidelity", options=params_mod.INPUT_FIDELITIES, default="high",
-                       tooltip="How closely to preserve the reference image: 'high' "
-                       "(default) or 'low'."),
-    ]
 
 
 class OpenAIImageEdit(IO.ComfyNode):
@@ -44,9 +31,9 @@ class OpenAIImageEdit(IO.ComfyNode):
                     "model",
                     tooltip="OpenAI gpt-image model. Switching this changes the options below.",
                     options=[
+                        IO.DynamicCombo.Option("gpt-image-2.5-flare", _gpt_image_25_inputs()),
+                        IO.DynamicCombo.Option("gpt-image-2.5-sunburst", _gpt_image_25_inputs()),
                         IO.DynamicCombo.Option("gpt-image-2", _gpt_image_2_inputs()),
-                        IO.DynamicCombo.Option("gpt-image-1.5", _legacy_edit_inputs()),
-                        IO.DynamicCombo.Option("gpt-image-1", _legacy_edit_inputs()),
                     ],
                 ),
                 IO.Autogrow.Input(
@@ -59,7 +46,8 @@ class OpenAIImageEdit(IO.ComfyNode):
                     "(if used) applies to the first image and requires exactly one image."),
                 IO.Combo.Input("quality", options=params_mod.QUALITIES, default="auto",
                                tooltip="Rendering quality. 'auto' lets the model decide; "
-                               "higher quality costs more."),
+                               "higher quality costs more. 'xhigh' and 'max' need "
+                               "gpt-image-2.5 and fall back to 'high' elsewhere."),
                 IO.Combo.Input("output_format", options=params_mod.FORMATS, default="png",
                                tooltip="Image file format returned by the API."),
                 IO.Combo.Input("moderation", options=params_mod.MODERATIONS, default="auto",
@@ -71,7 +59,8 @@ class OpenAIImageEdit(IO.ComfyNode):
                               tooltip="Inpaint mask: white marks the region to edit. Requires a "
                               "single reference image."),
             ],
-            outputs=[IO.Image.Output(display_name="image")],
+            outputs=[IO.Image.Output(display_name="image"),
+                     IO.Mask.Output(display_name="mask")],
         )
 
     @classmethod
@@ -79,10 +68,9 @@ class OpenAIImageEdit(IO.ComfyNode):
                 mask=None) -> IO.NodeOutput:
         size, custom_width, custom_height = unpack_size(model)
         ref_tensors = [t for t in (images or {}).values() if t is not None]
-        img, _info = build.run_edit(
+        img, out_mask, _info = build.run_edit(
             prompt=prompt, model=model["model"], size=size, quality=quality,
             background=model["background"], output_format=output_format, n=n,
-            images=ref_tensors, mask=mask,
-            input_fidelity=model.get("input_fidelity", "high"), moderation=moderation,
+            images=ref_tensors, mask=mask, moderation=moderation,
             custom_width=custom_width, custom_height=custom_height)
-        return IO.NodeOutput(img)
+        return IO.NodeOutput(img, out_mask)

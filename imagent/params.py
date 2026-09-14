@@ -1,8 +1,8 @@
 """Parameter constants, per-model capabilities, and size validation.
 
 Public entry points: capabilities_for(), validate_custom_dimensions(), resolve_size(),
-resolve_background(); plus the SIZE_PRESETS / QUALITIES / BACKGROUNDS / FORMATS /
-INPUT_FIDELITIES / MODERATIONS lists and the CUSTOM_DIM_* widget bounds.
+resolve_quality(), resolve_background(); plus the SIZE_PRESETS / QUALITIES /
+BACKGROUNDS / FORMATS / MODERATIONS lists and the CUSTOM_DIM_* widget bounds.
 """
 from __future__ import annotations
 
@@ -10,47 +10,44 @@ import logging
 
 log = logging.getLogger("imagent")
 
-# Size presets. The base sizes work on every gpt-image model; the high-res presets
-# and 'custom' are gpt-image-2 only (gated in resolve_size to stay cross-model safe).
+# Size presets, all supported by every model in the catalog.
 _BASE_SIZES = ["auto", "1024x1024", "1024x1536", "1536x1024"]
 _GPT2_SIZES = ["2048x2048", "2048x1152", "1152x2048", "3840x2160", "2160x3840"]
-_GPT2_ONLY_SIZES = set(_GPT2_SIZES)
 SIZE_PRESETS = [*_BASE_SIZES, *_GPT2_SIZES, "custom"]
 
-# Per-model size option lists for the IO DynamicCombo (what each model can pick).
-SIZES_BASE = list(_BASE_SIZES)                              # gpt-image-1 / 1.5
-SIZES_GPT2 = [*_BASE_SIZES, *_GPT2_SIZES, "custom"]         # gpt-image-2
+# Size option list for the IO DynamicCombo (what each model can pick).
+SIZES_GPT2 = [*_BASE_SIZES, *_GPT2_SIZES, "custom"]         # gpt-image-2 / 2.5
 
-# custom_width / custom_height INT-widget bounds (mirror the official node).
-CUSTOM_DIM_MIN, CUSTOM_DIM_MAX, CUSTOM_DIM_STEP = 1024, 3840, 16
+# custom_width / custom_height INT-widget bounds. The floor is the smallest edge
+# validate_custom_dimensions() can accept (480x1440 at the 3:1 aspect limit); a
+# higher floor would block sizes the validator considers legal.
+CUSTOM_DIM_MIN, CUSTOM_DIM_MAX, CUSTOM_DIM_STEP = 480, 3840, 16
 
 # Per-model background option lists (gpt-image-2 cannot do transparent).
 BACKGROUNDS = ["auto", "opaque", "transparent"]
 BACKGROUNDS_GPT2 = ["auto", "opaque"]
 
-QUALITIES = ["auto", "low", "medium", "high"]
+# 'xhigh' and 'max' exist only on gpt-image-2.5 (gated in resolve_quality).
+_EXTENDED_QUALITIES = {"xhigh", "max"}
+QUALITIES = ["auto", "low", "medium", "high", "xhigh", "max"]
 FORMATS = ["png", "jpeg", "webp"]
-INPUT_FIDELITIES = ["high", "low"]
 MODERATIONS = ["auto", "low"]
 
 # Widget bounds shared by both nodes' IO schemas.
 N_MIN, N_MAX = 1, 8
 
 # Per-model capability flags. Keys (all default False for unknown models):
-#   custom_size            - arbitrary WxH sizes (gpt-image-2 only)
-#   input_fidelity         - edit input_fidelity param (gpt-image-1.x)
 #   transparent_background - background="transparent" (NOT gpt-image-2, which errors)
-_DEFAULT_CAPS = {
-    "custom_size": False, "input_fidelity": False, "transparent_background": False,
-}
+#   extended_quality       - quality="xhigh" / "max" (gpt-image-2.5 only)
+_DEFAULT_CAPS = {"transparent_background": False, "extended_quality": False}
 
 CAPABILITIES: dict[str, dict[str, bool]] = {
-    "gpt-image-2":   {"custom_size": True,  "input_fidelity": False, "transparent_background": False},
-    "gpt-image-1.5": {"custom_size": False, "input_fidelity": True,  "transparent_background": True},
-    "gpt-image-1":   {"custom_size": False, "input_fidelity": True,  "transparent_background": True},
+    "gpt-image-2.5-sunburst": {"transparent_background": True,  "extended_quality": True},
+    "gpt-image-2.5-flare":    {"transparent_background": True,  "extended_quality": True},
+    "gpt-image-2":            {"transparent_background": False, "extended_quality": False},
 }
 
-# gpt-image-2 custom-resolution constraints (mirror the official node, 2026-06-08).
+# Custom-resolution constraints, shared by gpt-image-2 and gpt-image-2.5.
 _MAX_EDGE = 3840
 _MIN_TOTAL_PX = 655_360
 _MAX_TOTAL_PX = 8_294_400
@@ -86,29 +83,30 @@ def validate_custom_dimensions(width: int, height: int) -> str:
     return f"{w}x{h}"
 
 
-def resolve_size(size: str, custom_width: int, custom_height: int, model: str) -> str:
-    """Resolve the size parameter to a value the selected model accepts.
-
-    'custom' and the high-res presets are gpt-image-2 only; for other models they
-    fall back to 'auto' so switching models never sends an unsupported size.
-    """
-    caps = capabilities_for(model)
+def resolve_size(size: str, custom_width: int, custom_height: int) -> str:
+    """Resolve the size parameter, validating 'custom' against the WxH rules."""
     if size == "custom":
-        if not caps["custom_size"]:
-            log.info("imagent: %s does not support custom sizes; using 'auto'.", model)
-            return "auto"
         return validate_custom_dimensions(custom_width, custom_height)
-    if size in _GPT2_ONLY_SIZES and not caps["custom_size"]:
-        log.info("imagent: size %s is gpt-image-2 only; using 'auto' for %s.", size, model)
-        return "auto"
     return size
+
+
+def resolve_quality(quality: str, model: str) -> str:
+    """Drop an unsupported extended quality tier to 'high'.
+
+    'xhigh' and 'max' are gpt-image-2.5 only; older models error on them, so they
+    fall back to 'high' when the model is switched.
+    """
+    if quality in _EXTENDED_QUALITIES and not capabilities_for(model)["extended_quality"]:
+        log.info("imagent: %s does not support quality '%s'; using 'high'.", model, quality)
+        return "high"
+    return quality
 
 
 def resolve_background(background: str, model: str) -> str:
     """Drop an unsupported transparent background to 'auto'.
 
-    gpt-image-2 errors on background='transparent'; only gpt-image-1.x supports
-    it. Falling back to 'auto' keeps the node compatible across model switches.
+    gpt-image-2 errors on background='transparent'; gpt-image-2.5 supports it.
+    Falling back to 'auto' keeps the node compatible across model switches.
     """
     if background == "transparent" and not capabilities_for(model)["transparent_background"]:
         log.info("imagent: %s does not support a transparent background; using 'auto'.", model)
