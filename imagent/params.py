@@ -18,8 +18,10 @@ SIZE_PRESETS = [*_BASE_SIZES, *_GPT2_SIZES, "custom"]
 # Size option list for the IO DynamicCombo (what each model can pick).
 SIZES_GPT2 = [*_BASE_SIZES, *_GPT2_SIZES, "custom"]         # gpt-image-2 / 2.5
 
-# custom_width / custom_height INT-widget bounds (mirror the official node).
-CUSTOM_DIM_MIN, CUSTOM_DIM_MAX, CUSTOM_DIM_STEP = 1024, 3840, 16
+# custom_width / custom_height INT-widget bounds. The floor is the smallest edge
+# validate_custom_dimensions() can accept (480x1440 at the 3:1 aspect limit); a
+# higher floor would block sizes the validator considers legal.
+CUSTOM_DIM_MIN, CUSTOM_DIM_MAX, CUSTOM_DIM_STEP = 480, 3840, 16
 
 # Per-model background option lists (gpt-image-2 cannot do transparent).
 BACKGROUNDS = ["auto", "opaque", "transparent"]

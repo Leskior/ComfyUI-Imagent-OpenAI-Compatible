@@ -93,16 +93,17 @@ class OpenAIImageGenerate(IO.ComfyNode):
                 IO.Int.Input("n", default=1, min=params_mod.N_MIN, max=params_mod.N_MAX, step=1,
                              tooltip="How many images to generate (1-8)."),
             ],
-            outputs=[IO.Image.Output(display_name="image")],
+            outputs=[IO.Image.Output(display_name="image"),
+                     IO.Mask.Output(display_name="mask")],
         )
 
     @classmethod
     def execute(cls, prompt, model, quality, output_format, output_compression,
                 moderation, n) -> IO.NodeOutput:
         size, custom_width, custom_height = unpack_size(model)
-        img, _info = build.run_generate(
+        img, mask, _info = build.run_generate(
             prompt=prompt, model=model["model"], size=size, quality=quality,
             background=model["background"], output_format=output_format, n=n,
             moderation=moderation, custom_width=custom_width, custom_height=custom_height,
             output_compression=output_compression)
-        return IO.NodeOutput(img)
+        return IO.NodeOutput(img, mask)

@@ -37,7 +37,7 @@ class FakeClient:
 
 def test_generate_missing_key_returns_empty(monkeypatch):
     monkeypatch.setattr(client, "get_client", lambda: None)
-    img, info = run_generate(
+    img, _mask, info = run_generate(
         prompt="x", model="gpt-image-2", size="auto", quality="auto",
         background="auto", output_format="png", n=1)
     assert img.shape == (1, 512, 512, 3)
@@ -47,7 +47,7 @@ def test_generate_missing_key_returns_empty(monkeypatch):
 def test_generate_sends_expected_params_and_decodes(monkeypatch):
     rec = {}
     monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
-    img, info = run_generate(
+    img, _mask, info = run_generate(
         prompt="a cat", model="gpt-image-2", size="1024x1024", quality="high",
         background="opaque", output_format="png", n=2)
     sent = rec["generate"]
@@ -131,7 +131,7 @@ def test_generate_api_error_returns_empty(monkeypatch):
     monkeypatch.setattr(
         FakeImages, "generate",
         lambda self, **kw: (_ for _ in ()).throw(RuntimeError("network error")))
-    img, info = run_generate(
+    img, _mask, info = run_generate(
         prompt="x", model="gpt-image-2", size="auto", quality="auto",
         background="auto", output_format="png", n=1)
     assert img.shape == (1, 512, 512, 3)
@@ -140,7 +140,7 @@ def test_generate_api_error_returns_empty(monkeypatch):
 
 def test_generate_invalid_custom_size_returns_error(monkeypatch):
     monkeypatch.setattr(client, "get_client", lambda: FakeClient({}))
-    img, info = run_generate(
+    img, _mask, info = run_generate(
         prompt="x", model="gpt-image-2", size="custom", quality="auto",
         background="auto", output_format="png", n=1,
         custom_width=1000, custom_height=1000)   # 1000 is not a multiple of 16
@@ -171,7 +171,7 @@ def _img_tensor(h=16, w=16):
 def test_edit_sends_image_list_and_decodes(monkeypatch):
     rec = {}
     monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
-    img, info = run_edit(
+    img, _mask, info = run_edit(
         prompt="make it snowy", model="gpt-image-2", size="auto", quality="auto",
         background="auto", output_format="png", n=1,
         images=[_img_tensor(), _img_tensor()])
@@ -225,7 +225,7 @@ def test_edit_downscales_large_reference(monkeypatch):
 
 def test_edit_missing_image_returns_error(monkeypatch):
     monkeypatch.setattr(client, "get_client", lambda: FakeClient({}))
-    img, info = run_edit(
+    img, _mask, info = run_edit(
         prompt="x", model="gpt-image-2", size="auto", quality="auto",
         background="auto", output_format="png", n=1, images=[])
     assert info.startswith("Error")
@@ -237,7 +237,7 @@ def test_edit_api_error_returns_empty(monkeypatch):
     monkeypatch.setattr(
         FakeImages, "edit",
         lambda self, **kw: (_ for _ in ()).throw(RuntimeError("network error")))
-    img, info = run_edit(
+    img, _mask, info = run_edit(
         prompt="x", model="gpt-image-2", size="auto", quality="auto",
         background="auto", output_format="png", n=1, images=[_img_tensor()])
     assert img.shape == (1, 512, 512, 3)
@@ -247,7 +247,7 @@ def test_edit_api_error_returns_empty(monkeypatch):
 def test_edit_mask_with_multiple_refs_returns_error(monkeypatch):
     monkeypatch.setattr(client, "get_client", lambda: FakeClient({}))
     mask = torch.zeros((16, 16), dtype=torch.float32)
-    img, info = run_edit(
+    img, _mask, info = run_edit(
         prompt="x", model="gpt-image-2", size="auto", quality="auto",
         background="auto", output_format="png", n=1,
         images=[_img_tensor(), _img_tensor()], mask=mask)

@@ -65,7 +65,7 @@ Text-to-image generation via `images.generate`.
 | `prompt` | STRING | Text description of the image to generate |
 | `model` | **DynamicCombo** | `gpt-image-2.5-flare` (default), `gpt-image-2.5-sunburst`, `gpt-image-2`. Switching the model swaps the options below. |
 | ↳ `size` | COMBO | `auto`, the three base sizes, five high-res presets, and `custom`. |
-| ↳↳ `custom_width` / `custom_height` | INT | **Appear only when `size = custom`.** 1024–3840, step 16; both multiples of 16; aspect ≤ 3:1; total pixels 655,360–8,294,400. |
+| ↳↳ `custom_width` / `custom_height` | INT | **Appear only when `size = custom`.** 480–3840, step 16; both multiples of 16; aspect ≤ 3:1; total pixels 655,360–8,294,400. |
 | ↳ `background` | COMBO | **gpt-image-2.5:** `auto`, `opaque`, `transparent` (needs `png`/`webp`). **gpt-image-2:** `auto`, `opaque`. |
 | `quality` | COMBO | `auto`, `low`, `medium`, `high`, plus `xhigh` / `max` on gpt-image-2.5 (other models fall back to `high`). |
 | `output_format` | COMBO | `png`, `jpeg`, `webp` |
@@ -77,7 +77,14 @@ Rows marked ↳ live inside the dynamic `model` widget (appear only for models t
 
 > No `seed` widget: OpenAI's image API has no seed, so it can't make outputs reproducible. ComfyUI's normal input-based caching applies — re-queuing an unchanged graph returns the cached image; change the prompt (or any input) to regenerate.
 
-**Output:** `image` (IMAGE tensor, batch of n). Errors are logged to the ComfyUI console.
+**Outputs:** `image` (IMAGE tensor, batch of n) and `mask` (MASK tensor). Errors are logged to the ComfyUI console.
+
+ComfyUI's IMAGE type is RGB, so when `background = transparent` the alpha channel comes out on
+`mask` instead — following the `LoadImage` convention, `mask = 1 - alpha`, meaning a transparent
+region reads as selected (1.0). The `image` preview will look black in those regions; that is the
+alpha being discarded for display, not a failed generation. To get a transparent file, feed
+`image` and `mask` into **Join Image with Alpha** (it inverts the mask internally, so no
+`InvertMask` in between) and save the result. Opaque output gives an all-zero mask.
 
 ---
 
@@ -103,7 +110,14 @@ Rows marked ↳ live inside the dynamic `model` widget; ↳↳ rows appear only 
 
 > No `input_fidelity` widget: every model shipped here always uses high input fidelity, and passing the parameter is an error. It only applied to the retired gpt-image-1.x models.
 
-**Output:** `image` (IMAGE tensor, batch of n). Errors are logged to the ComfyUI console.
+**Outputs:** `image` (IMAGE tensor, batch of n) and `mask` (MASK tensor). Errors are logged to the ComfyUI console.
+
+ComfyUI's IMAGE type is RGB, so when `background = transparent` the alpha channel comes out on
+`mask` instead — following the `LoadImage` convention, `mask = 1 - alpha`, meaning a transparent
+region reads as selected (1.0). The `image` preview will look black in those regions; that is the
+alpha being discarded for display, not a failed generation. To get a transparent file, feed
+`image` and `mask` into **Join Image with Alpha** (it inverts the mask internally, so no
+`InvertMask` in between) and save the result. Opaque output gives an all-zero mask.
 
 **Quick-start recipes:**
 - **Edit:** connect one image to `images`, write a `prompt`, leave `mask` disconnected.

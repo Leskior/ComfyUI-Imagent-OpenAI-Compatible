@@ -59,7 +59,8 @@ class OpenAIImageEdit(IO.ComfyNode):
                               tooltip="Inpaint mask: white marks the region to edit. Requires a "
                               "single reference image."),
             ],
-            outputs=[IO.Image.Output(display_name="image")],
+            outputs=[IO.Image.Output(display_name="image"),
+                     IO.Mask.Output(display_name="mask")],
         )
 
     @classmethod
@@ -67,9 +68,9 @@ class OpenAIImageEdit(IO.ComfyNode):
                 mask=None) -> IO.NodeOutput:
         size, custom_width, custom_height = unpack_size(model)
         ref_tensors = [t for t in (images or {}).values() if t is not None]
-        img, _info = build.run_edit(
+        img, out_mask, _info = build.run_edit(
             prompt=prompt, model=model["model"], size=size, quality=quality,
             background=model["background"], output_format=output_format, n=n,
             images=ref_tensors, mask=mask, moderation=moderation,
             custom_width=custom_width, custom_height=custom_height)
-        return IO.NodeOutput(img)
+        return IO.NodeOutput(img, out_mask)

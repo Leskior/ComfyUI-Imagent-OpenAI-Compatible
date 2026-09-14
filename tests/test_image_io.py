@@ -24,9 +24,26 @@ def test_pil_to_tensor_shape_and_range():
     assert abs(float(t[0, 0, 0, 0]) - 1.0) < 1e-6   # red channel
 
 
-def test_b64_to_tensor_roundtrip():
-    t = image_io.b64_to_tensor(_png_b64(size=(32, 48)))
-    assert t.shape == (1, 48, 32, 3)
+def test_response_item_to_pil_roundtrip():
+    item = types.SimpleNamespace(b64_json=_png_b64(size=(32, 48)), url=None)
+    assert image_io.response_item_to_pil(item).size == (32, 48)
+
+
+def test_rgba_alpha_becomes_mask():
+    rgba = Image.new("RGBA", (4, 4), (255, 0, 0, 255))
+    rgba.putalpha(Image.fromarray(
+        np.array([[0, 0, 255, 255]] * 4, dtype=np.uint8), "L"))
+    img, mask = image_io.pil_to_image_and_mask(rgba)
+    assert img.shape == (1, 4, 4, 3)
+    assert mask.shape == (1, 4, 4)
+    assert float(mask[0, 0, 0]) == 1.0      # transparent -> selected
+    assert float(mask[0, 0, 3]) == 0.0      # opaque -> unselected
+
+
+def test_rgb_without_alpha_yields_zero_mask():
+    _img, mask = image_io.pil_to_image_and_mask(Image.new("RGB", (8, 4), (1, 2, 3)))
+    assert mask.shape == (1, 4, 8)
+    assert float(mask.abs().sum()) == 0.0
 
 
 def test_empty_image_is_black_rgb():
@@ -69,13 +86,12 @@ def test_downscale_pil_to_pixel_limit_keeps_small_image():
     assert out.size == (64, 48)               # unchanged
 
 
-def test_response_item_to_tensor_handles_b64():
+def test_response_item_to_pil_handles_b64():
     item = types.SimpleNamespace(b64_json=_png_b64(size=(20, 10)), url=None)
-    t = image_io.response_item_to_tensor(item)
-    assert t.shape == (1, 10, 20, 3)
+    assert image_io.response_item_to_pil(item).size == (20, 10)
 
 
-def test_response_item_to_tensor_handles_url(monkeypatch):
+def test_response_item_to_pil_handles_url(monkeypatch):
     png = base64.b64decode(_png_b64(size=(12, 6)))
 
     class _FakeResp:
@@ -90,21 +106,21 @@ def test_response_item_to_tensor_handles_url(monkeypatch):
 
     monkeypatch.setattr("urllib.request.urlopen", lambda url, **kw: _FakeResp())
     item = types.SimpleNamespace(b64_json=None, url="http://example/x.png")
-    t = image_io.response_item_to_tensor(item)
-    assert t.shape == (1, 6, 12, 3)
+    assert image_io.response_item_to_pil(item).size == (12, 6)
 
 
 def test_batch_from_response_data_concatenates_b64_items():
     data = [types.SimpleNamespace(b64_json=_png_b64(), url=None) for _ in range(3)]
-    batch = image_io.batch_from_response_data(data)
+    batch, masks = image_io.batch_from_response_data(data)
     assert batch.shape[0] == 3
+    assert masks.shape[0] == 3
 
 
-def test_response_item_to_tensor_raises_without_payload():
+def test_response_item_to_pil_raises_without_payload():
     import pytest
     item = types.SimpleNamespace(b64_json=None, url=None)
     with pytest.raises(ValueError):
-        image_io.response_item_to_tensor(item)
+        image_io.response_item_to_pil(item)
 
 
 def test_mask_3d_shape_is_handled():

@@ -10,7 +10,9 @@ def test_constants():
         assert base in params.SIZE_PRESETS
     for hires in ("2048x2048", "3840x2160", "2160x3840"):
         assert hires in params.SIZE_PRESETS
-    assert (params.CUSTOM_DIM_MIN, params.CUSTOM_DIM_MAX, params.CUSTOM_DIM_STEP) == (1024, 3840, 16)
+    assert (params.CUSTOM_DIM_MIN, params.CUSTOM_DIM_MAX, params.CUSTOM_DIM_STEP) == (480, 3840, 16)
+    # The widget floor must not reject a size the validator accepts (the 3:1 edge case).
+    assert params.validate_custom_dimensions(1440, params.CUSTOM_DIM_MIN) == "1440x480"
     assert params.QUALITIES == ["auto", "low", "medium", "high", "xhigh", "max"]
     assert params.BACKGROUNDS == ["auto", "opaque", "transparent"]
     assert params.FORMATS == ["png", "jpeg", "webp"]
