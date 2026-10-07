@@ -74,3 +74,24 @@ def test_resolve_size_passes_presets_through_and_validates_custom():
     assert params.resolve_size("custom", 1536, 864) == "1536x864"
     with pytest.raises(ValueError):
         params.resolve_size("custom", 1000, 1000)
+
+
+def test_custom_selector_is_permissive():
+    # A compatible endpoint's capabilities are unknown, so nothing is rewritten.
+    assert params.capabilities_for(params.CUSTOM_MODEL) == {
+        "transparent_background": True, "extended_quality": True}
+    assert params.resolve_background("transparent", params.CUSTOM_MODEL) == "transparent"
+    assert params.resolve_quality("max", params.CUSTOM_MODEL) == "max"
+    assert params.resolve_quality("xhigh", params.CUSTOM_MODEL) == "xhigh"
+
+
+def test_resolve_model_maps_selector_to_api_id():
+    assert params.resolve_model("gpt-image-2") == "gpt-image-2"
+    assert params.resolve_model("gpt-image-2", "ignored") == "gpt-image-2"
+    assert params.resolve_model(params.CUSTOM_MODEL, "  flux-1.1-pro ") == "flux-1.1-pro"
+
+
+@pytest.mark.parametrize("name", ["", "   "])
+def test_resolve_model_rejects_blank_custom_name(name):
+    with pytest.raises(ValueError):
+        params.resolve_model(params.CUSTOM_MODEL, name)

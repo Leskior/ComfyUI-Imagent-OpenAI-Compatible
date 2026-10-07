@@ -11,9 +11,11 @@ services:
     ports:
       - "8188:8188"
     environment:
-      # Checked before config.json by imagent/client.py. Set OPENAI_API_KEY in
-      # your shell before `up`, or it passes through empty.
+      # Checked before config.json by imagent/client.py. Set OPENAI_API_KEY (and
+      # OPENAI_BASE_URL to target an OpenAI-compatible endpoint) in your shell
+      # before `up`, or they pass through empty.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
     volumes:
       # The node under development: bind-mount the repo into custom_nodes so
       # edits reload on container restart.

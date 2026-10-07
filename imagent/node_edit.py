@@ -9,7 +9,8 @@ from comfy_api.latest import IO
 
 from . import build
 from . import params as params_mod
-from .node_generate import _gpt_image_2_inputs, _gpt_image_25_inputs, unpack_size
+from .node_generate import (_api_key_input, _base_url_input, _custom_model_inputs,
+                            _gpt_image_2_inputs, _gpt_image_25_inputs, unpack_size)
 
 _MAX_REFS = 16
 
@@ -22,18 +23,22 @@ class OpenAIImageEdit(IO.ComfyNode):
             display_name="🤖 Imagent: OpenAI Image Edit",
             category="Imagent",
             description="BYOK image edit / inpaint / multi-reference compose via OpenAI "
-                        "gpt-image models (direct API, no proxy).",
+                        "gpt-image models or any OpenAI-compatible endpoint (direct API, "
+                        "no proxy).",
             inputs=[
                 IO.String.Input("prompt", multiline=True, default="",
                                 placeholder="Describe the edit to apply…",
                                 tooltip="Describe the edit to apply to the reference image(s)."),
                 IO.DynamicCombo.Input(
                     "model",
-                    tooltip="OpenAI gpt-image model. Switching this changes the options below.",
+                    tooltip="OpenAI gpt-image model, or 'custom' to send any model id to an "
+                            "OpenAI-compatible endpoint. Switching this changes the options "
+                            "below.",
                     options=[
                         IO.DynamicCombo.Option("gpt-image-2.5-flare", _gpt_image_25_inputs()),
                         IO.DynamicCombo.Option("gpt-image-2.5-sunburst", _gpt_image_25_inputs()),
                         IO.DynamicCombo.Option("gpt-image-2", _gpt_image_2_inputs()),
+                        IO.DynamicCombo.Option(params_mod.CUSTOM_MODEL, _custom_model_inputs()),
                     ],
                 ),
                 IO.Autogrow.Input(
@@ -58,6 +63,8 @@ class OpenAIImageEdit(IO.ComfyNode):
                 IO.Mask.Input("mask", optional=True,
                               tooltip="Inpaint mask: white marks the region to edit. Requires a "
                               "single reference image."),
+                _base_url_input(),
+                _api_key_input(),
             ],
             outputs=[IO.Image.Output(display_name="image"),
                      IO.Mask.Output(display_name="mask")],
@@ -65,12 +72,14 @@ class OpenAIImageEdit(IO.ComfyNode):
 
     @classmethod
     def execute(cls, prompt, model, images, quality, output_format, moderation, n,
-                mask=None) -> IO.NodeOutput:
+                mask=None, base_url="", api_key="") -> IO.NodeOutput:
         size, custom_width, custom_height = unpack_size(model)
         ref_tensors = [t for t in (images or {}).values() if t is not None]
         img, out_mask, _info = build.run_edit(
-            prompt=prompt, model=model["model"], size=size, quality=quality,
+            prompt=prompt, model=model["model"], model_name=model.get("model_name", ""),
+            size=size, quality=quality,
             background=model["background"], output_format=output_format, n=n,
             images=ref_tensors, mask=mask, moderation=moderation,
-            custom_width=custom_width, custom_height=custom_height)
+            custom_width=custom_width, custom_height=custom_height,
+            api_key=api_key, base_url=base_url)
         return IO.NodeOutput(img, out_mask)

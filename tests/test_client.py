@@ -1,4 +1,7 @@
 import json
+
+import pytest
+
 import imagent.client as client
 
 
@@ -75,3 +78,75 @@ def test_friendly_error_uses_status_code():
 
     assert "verif" in client.friendly_error(FakeAPIError("denied")).lower()
     assert "rate" in client.friendly_error(FakeRateError("slow down")).lower()
+
+
+# ---------------------------------------------------------------------------
+# Base URL resolution + client construction
+# ---------------------------------------------------------------------------
+
+
+def test_base_url_env_takes_precedence(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://from-env.example/v1")
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"OPENAI_BASE_URL": "https://from-file.example/v1"}))
+    monkeypatch.setattr(client, "_CONFIG_PATH", cfg)
+    assert client.resolve_base_url() == "https://from-env.example/v1"
+
+
+def test_base_url_config_fallback(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"OPENAI_BASE_URL": "https://from-file.example/v1"}))
+    monkeypatch.setattr(client, "_CONFIG_PATH", cfg)
+    assert client.resolve_base_url() == "https://from-file.example/v1"
+
+
+@pytest.mark.parametrize("value", ["", "   ", "your_base_url_here", "https://your-endpoint/v1"])
+def test_base_url_blank_or_placeholder_is_none(monkeypatch, tmp_path, value):
+    monkeypatch.setenv("OPENAI_BASE_URL", value)
+    monkeypatch.setattr(client, "_CONFIG_PATH", tmp_path / "nope.json")
+    assert client.resolve_base_url() is None
+
+
+def test_get_client_defaults_to_the_openai_endpoint(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.setattr(client, "_CONFIG_PATH", tmp_path / "nope.json")
+    assert str(client.get_client().base_url).rstrip("/") == "https://api.openai.com/v1"
+
+
+def test_get_client_uses_env_base_url_then_node_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://from-env.example/v1")
+    monkeypatch.setattr(client, "_CONFIG_PATH", tmp_path / "nope.json")
+    assert str(client.get_client().base_url).rstrip("/") == "https://from-env.example/v1"
+    overridden = client.get_client(base_url="https://from-node.example/v1")
+    assert str(overridden.base_url).rstrip("/") == "https://from-node.example/v1"
+
+
+def test_get_client_node_key_overrides_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+    monkeypatch.setattr(client, "_CONFIG_PATH", tmp_path / "nope.json")
+    assert client.get_client(api_key="sk-node").api_key == "sk-node"
+
+
+def test_get_client_blank_override_falls_back_to_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+    monkeypatch.setattr(client, "_CONFIG_PATH", tmp_path / "nope.json")
+    assert client.get_client(api_key="", base_url="").api_key == "sk-env"
+
+
+def test_get_client_without_any_key_is_none(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(client, "_CONFIG_PATH", tmp_path / "nope.json")
+    assert client.get_client() is None
+    assert client.get_client(api_key="sk-...") is None   # still a placeholder
+
+
+def test_non_object_config_is_ignored(monkeypatch, tmp_path):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(["not", "an", "object"]))
+    monkeypatch.setattr(client, "_CONFIG_PATH", cfg)
+    assert client.resolve_api_key() is None
+    assert client.resolve_base_url() is None

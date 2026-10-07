@@ -258,11 +258,12 @@ def test_edit_mask_with_multiple_refs_returns_error(monkeypatch):
 def test_model_widget_matches_catalog_and_gpt_image_25_options():
     import pytest
     pytest.importorskip("comfy_api")
+    from imagent import params
     from imagent.node_edit import OpenAIImageEdit
     from imagent.node_generate import OpenAIImageGenerate
     for node in (OpenAIImageGenerate, OpenAIImageEdit):
         model_input = next(i for i in node.define_schema().inputs if i.id == "model")
-        assert [o.key for o in model_input.options] == client.MODELS
+        assert [o.key for o in model_input.options] == [*client.MODELS, params.CUSTOM_MODEL]
         for key in ("gpt-image-2.5-flare", "gpt-image-2.5-sunburst"):
             subs = {i.id: i for i in next(o for o in model_input.options if o.key == key).inputs}
             assert "transparent" in subs["background"].options
@@ -284,3 +285,79 @@ def test_extension_registers_both_nodes():
     assert set(schemas) == {"ImagentOpenAIImage", "ImagentOpenAIImageEdit"}
     assert schemas["ImagentOpenAIImage"] == "🤖 Imagent: OpenAI Image"
     assert schemas["ImagentOpenAIImageEdit"] == "🤖 Imagent: OpenAI Image Edit"
+
+
+# ---------------------------------------------------------------------------
+# OpenAI-compatible endpoints: custom model id + per-node credential overrides
+# ---------------------------------------------------------------------------
+
+
+def test_generate_custom_model_sends_the_given_id(monkeypatch):
+    rec = {}
+    monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
+    run_generate(
+        prompt="x", model="custom", model_name="flux-1.1-pro", size="auto",
+        quality="max", background="transparent", output_format="png", n=1)
+    sent = rec["generate"]
+    assert sent["model"] == "flux-1.1-pro"
+    assert sent["quality"] == "max"              # nothing narrowed for a custom model
+    assert sent["background"] == "transparent"   # ... the endpoint stays authoritative
+
+
+def test_generate_custom_model_without_a_name_returns_error(monkeypatch):
+    monkeypatch.setattr(client, "get_client", lambda: FakeClient({}))
+    img, _mask, info = run_generate(
+        prompt="x", model="custom", model_name="", size="auto", quality="auto",
+        background="auto", output_format="png", n=1)
+    assert img.shape == (1, 512, 512, 3)
+    assert info.startswith("Error")
+
+
+def test_edit_custom_model_sends_the_given_id(monkeypatch):
+    rec = {}
+    monkeypatch.setattr(client, "get_client", lambda: FakeClient(rec))
+    run_edit(
+        prompt="x", model="custom", model_name="qwen-image", size="auto", quality="auto",
+        background="auto", output_format="png", n=1, images=[_img_tensor()])
+    assert rec["edit"]["model"] == "qwen-image"
+
+
+def test_credential_overrides_are_forwarded_to_get_client(monkeypatch):
+    seen = {}
+
+    def fake_get_client(api_key="", base_url=""):
+        seen.update(api_key=api_key, base_url=base_url)
+        return FakeClient({})
+
+    monkeypatch.setattr(client, "get_client", fake_get_client)
+    run_generate(prompt="x", model="gpt-image-2", size="auto", quality="auto",
+                 background="auto", output_format="png", n=1,
+                 api_key="sk-node", base_url="https://node.example/v1")
+    assert seen == {"api_key": "sk-node", "base_url": "https://node.example/v1"}
+
+
+def test_no_overrides_uses_the_plain_get_client_path(monkeypatch):
+    calls = []
+
+    def fake_get_client(*args, **kwargs):
+        calls.append((args, kwargs))
+        return FakeClient({})
+
+    monkeypatch.setattr(client, "get_client", fake_get_client)
+    run_generate(prompt="x", model="gpt-image-2", size="auto", quality="auto",
+                 background="auto", output_format="png", n=1)
+    assert calls == [((), {})]
+
+
+def test_custom_option_exposes_model_name_and_nodes_expose_overrides():
+    import pytest
+    pytest.importorskip("comfy_api")
+    from imagent import params
+    from imagent.node_edit import OpenAIImageEdit
+    from imagent.node_generate import OpenAIImageGenerate
+    for node in (OpenAIImageGenerate, OpenAIImageEdit):
+        schema = node.define_schema()
+        model_input = next(i for i in schema.inputs if i.id == "model")
+        custom = next(o for o in model_input.options if o.key == params.CUSTOM_MODEL)
+        assert {i.id for i in custom.inputs} == {"model_name", "size", "background"}
+        assert {"base_url", "api_key"} <= {i.id for i in schema.inputs}

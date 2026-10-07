@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.3.0 — 2026-10-08
+
+### Added
+
+- **OpenAI-compatible endpoints** — the base URL now comes from `OPENAI_BASE_URL`
+  (environment) or `config.json`, and both nodes gained an optional `base_url`
+  input that overrides both. Point it at any gateway or provider that speaks the
+  OpenAI Images API, e.g. `https://your-gateway.example/v1`; blank keeps
+  `https://api.openai.com/v1`. Both nodes also gained an optional `api_key` input
+  that overrides `OPENAI_API_KEY` / `config.json` for that node.
+  **Both nodes gained two inputs, so saved workflows will show the node as changed.**
+- **`custom` model selection** — the `model` dropdown's new `custom` option reveals
+  a `model_name` field for an arbitrary model id (e.g. `flux-1.1-pro`), because
+  compatible endpoints rarely serve the `gpt-image-*` ids. A custom model skips the
+  capability gating: `quality` and `background` are sent exactly as configured and
+  the endpoint reports whatever it does not support. `size` keeps the gpt-image
+  preset list and `WxH` rules.
+- `OPENAI_BASE_URL` is forwarded by the Docker smoke-test compose file.
+
 ## v0.2.0 — 2026-09-14
 
 ### Added

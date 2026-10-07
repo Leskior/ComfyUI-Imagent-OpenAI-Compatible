@@ -28,6 +28,7 @@
 - 🏞️ **Up to 8 images per call** — batch generation in a single node execution.
 - 🛡️ **Optional content moderation** — `auto` (default) or `low`.
 - 🔑 **BYOK — your own OpenAI API key, your own costs.** Unlike ComfyUI's built-in OpenAI nodes (which route through ComfyUI's paid proxy), Imagent calls the OpenAI API directly. No proxy, no per-image credit markup.
+- 🔌 **OpenAI-compatible endpoints** — set `OPENAI_BASE_URL` (env, `config.json`, or the node's `base_url` input) and pick `custom` as the model to send any other endpoint's model id.
 - 🚫 DALL·E intentionally excluded — all DALL·E models were shut down by OpenAI in 2026.
 
 ## 📦 Installation
@@ -45,14 +46,30 @@ pip install -r ComfyUI-Imagent/requirements.txt
 ```
 Restart ComfyUI.
 
-## 🔑 API key
+## 🔑 API key & endpoint
 
-Imagent reads your key in this order:
+Imagent resolves both settings from the environment first, then `config.json`, and each node can override them per call:
 
-1. **Environment variable** (preferred): set `OPENAI_API_KEY` before launching ComfyUI.
-2. **`config.json`**: copy `config.example.json` → `config.json` (gitignored) in the extension directory and add your key.
+| Setting | Environment variable | `config.json` key |
+|---|---|---|
+| API key | `OPENAI_API_KEY` | `OPENAI_API_KEY` |
+| Base URL | `OPENAI_BASE_URL` | `OPENAI_BASE_URL` |
+
+1. **Environment variables** (preferred): set `OPENAI_API_KEY` — and `OPENAI_BASE_URL` when you are not calling OpenAI — before launching ComfyUI.
+2. **`config.json`**: copy `config.example.json` → `config.json` (gitignored) in the extension directory and fill in your values.
+3. **`api_key` / `base_url` node inputs**: blank by default; when filled they win over the two sources above. Prefer 1 and 2 — a key typed into a widget is saved in the workflow file, so it travels with any workflow you share.
+
+`OPENAI_BASE_URL` includes the version segment, e.g. `https://your-gateway.example/v1`. Leave it blank to use `https://api.openai.com/v1`.
 
 > **Note:** OpenAI may require **API Organization Verification** before gpt-image models can be called. If your key is valid but you receive an authorization error, complete verification in the OpenAI dashboard — the error message logged to the ComfyUI console will tell you.
+
+## 🔌 OpenAI-compatible endpoints
+
+The nodes speak the OpenAI Images API, so a self-hosted gateway or a third-party provider that implements it works too — set the base URL and send that endpoint's own model id by picking `custom` in the `model` dropdown and filling in `model_name`.
+
+Selecting `custom` turns off the per-model gating described in the tables below: the endpoint's capabilities are unknown, so `quality` and `background` are sent exactly as configured and whatever the endpoint does not support comes back as its own error.
+
+> **Known limit:** `size` still offers only the gpt-image presets, and a custom `WxH` must satisfy the gpt-image rules (both edges 480–3840 and multiples of 16, aspect ≤ 3:1, total pixels 655,360–8,294,400). Sizes outside that — `512x512`, for example — cannot be entered in the UI; use `auto` if the endpoint accepts it.
 
 ## 🧩 Nodes
 
@@ -63,15 +80,18 @@ Text-to-image generation via `images.generate`.
 | Parameter | Type | Values / Notes |
 |---|---|---|
 | `prompt` | STRING | Text description of the image to generate |
-| `model` | **DynamicCombo** | `gpt-image-2.5-flare` (default), `gpt-image-2.5-sunburst`, `gpt-image-2`. Switching the model swaps the options below. |
+| `model` | **DynamicCombo** | `gpt-image-2.5-flare` (default), `gpt-image-2.5-sunburst`, `gpt-image-2`, or `custom`. Switching the model swaps the options below. |
+| ↳ `model_name` | STRING | **`custom` only.** Model id sent to the endpoint, e.g. `flux-1.1-pro`. Required when `model = custom`. |
 | ↳ `size` | COMBO | `auto`, the three base sizes, five high-res presets, and `custom`. |
 | ↳↳ `custom_width` / `custom_height` | INT | **Appear only when `size = custom`.** 480–3840, step 16; both multiples of 16; aspect ≤ 3:1; total pixels 655,360–8,294,400. |
-| ↳ `background` | COMBO | **gpt-image-2.5:** `auto`, `opaque`, `transparent` (needs `png`/`webp`). **gpt-image-2:** `auto`, `opaque`. |
-| `quality` | COMBO | `auto`, `low`, `medium`, `high`, plus `xhigh` / `max` on gpt-image-2.5 (other models fall back to `high`). |
+| ↳ `background` | COMBO | **gpt-image-2.5:** `auto`, `opaque`, `transparent` (needs `png`/`webp`). **gpt-image-2:** `auto`, `opaque`. **`custom`:** all three, passed through unchanged. |
+| `quality` | COMBO | `auto`, `low`, `medium`, `high`, plus `xhigh` / `max` on gpt-image-2.5 (other models fall back to `high`; `custom` passes the value through). |
 | `output_format` | COMBO | `png`, `jpeg`, `webp` |
 | `output_compression` | INT | 0–100. Applied only for `jpeg` and `webp`. |
 | `moderation` | COMBO | `auto` (default), `low`. Sent only when not `auto`. |
 | `n` | INT | 1–8 images per call |
+| `base_url` | STRING | Optional per-node override of `OPENAI_BASE_URL` / `config.json`. Blank falls back to the env var, then `config.json`, then `https://api.openai.com/v1`. |
+| `api_key` | STRING | Optional per-node override of `OPENAI_API_KEY` / `config.json`. Blank falls back to the env var, then `config.json`. |
 
 Rows marked ↳ live inside the dynamic `model` widget (appear only for models that support them); ↳↳ rows are nested one level deeper and appear only when their parent option is selected.
 
@@ -95,16 +115,19 @@ Image editing, inpainting, and multi-reference compositing via `images.edit`.
 | Parameter | Type | Values / Notes |
 |---|---|---|
 | `prompt` | STRING | Description of the desired edit |
-| `model` | **DynamicCombo** | Same three models; switching swaps the options below. |
+| `model` | **DynamicCombo** | Same models as the generate node, including `custom`; switching swaps the options below. |
+| ↳ `model_name` | STRING | **`custom` only.** Model id sent to the endpoint. Required when `model = custom`. |
 | ↳ `size` | COMBO | Same as the generate node. |
 | ↳↳ `custom_width` / `custom_height` | INT | **Appear only when `size = custom`.** Same rules as the generate node. |
-| ↳ `background` | COMBO | gpt-image-2.5: `auto`/`opaque`/`transparent`; gpt-image-2: `auto`/`opaque`. |
+| ↳ `background` | COMBO | gpt-image-2.5: `auto`/`opaque`/`transparent`; gpt-image-2: `auto`/`opaque`; `custom`: all three, passed through unchanged. |
 | `images` | IMAGE (auto-grow) | Reference image(s) to edit — grows up to **16** slots; at least one required. |
-| `quality` | COMBO | `auto`, `low`, `medium`, `high`, plus `xhigh` / `max` on gpt-image-2.5. |
+| `quality` | COMBO | `auto`, `low`, `medium`, `high`, plus `xhigh` / `max` on gpt-image-2.5 (`custom` passes the value through). |
 | `output_format` | COMBO | `png`, `jpeg`, `webp` |
 | `moderation` | COMBO | `auto` (default), `low` |
 | `n` | INT | 1–8 images per call |
 | `mask` *(optional)* | MASK | **White = region to edit.** Inpainting requires exactly one reference image. |
+| `base_url` | STRING | Optional per-node override of `OPENAI_BASE_URL` / `config.json`. |
+| `api_key` | STRING | Optional per-node override of `OPENAI_API_KEY` / `config.json`. |
 
 Rows marked ↳ live inside the dynamic `model` widget; ↳↳ rows appear only when their parent option is selected.
 

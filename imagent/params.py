@@ -1,8 +1,9 @@
 """Parameter constants, per-model capabilities, and size validation.
 
-Public entry points: capabilities_for(), validate_custom_dimensions(), resolve_size(),
-resolve_quality(), resolve_background(); plus the SIZE_PRESETS / QUALITIES /
-BACKGROUNDS / FORMATS / MODERATIONS lists and the CUSTOM_DIM_* widget bounds.
+Public entry points: capabilities_for(), resolve_model(), validate_custom_dimensions(),
+resolve_size(), resolve_quality(), resolve_background(); plus the SIZE_PRESETS /
+QUALITIES / BACKGROUNDS / FORMATS / MODERATIONS lists, the CUSTOM_MODEL selector and
+the CUSTOM_DIM_* widget bounds.
 """
 from __future__ import annotations
 
@@ -41,6 +42,12 @@ N_MIN, N_MAX = 1, 8
 #   extended_quality       - quality="xhigh" / "max" (gpt-image-2.5 only)
 _DEFAULT_CAPS = {"transparent_background": False, "extended_quality": False}
 
+# Selector for a user-supplied model id, so any OpenAI-compatible endpoint can be
+# targeted. Its capabilities are unknown, so nothing is gated: the request goes
+# out unchanged and the endpoint reports whatever it does not support.
+CUSTOM_MODEL = "custom"
+_CUSTOM_CAPS = {"transparent_background": True, "extended_quality": True}
+
 CAPABILITIES: dict[str, dict[str, bool]] = {
     "gpt-image-2.5-sunburst": {"transparent_background": True,  "extended_quality": True},
     "gpt-image-2.5-flare":    {"transparent_background": True,  "extended_quality": True},
@@ -54,7 +61,13 @@ _MAX_TOTAL_PX = 8_294_400
 
 
 def capabilities_for(model: str) -> dict[str, bool]:
-    """Return a copy of the capability flags for *model*, defaulting to all-False."""
+    """Return a copy of the capability flags for the *model* selector.
+
+    Unknown selectors default to all-False (conservative); CUSTOM_MODEL is
+    all-True so a compatible endpoint's own errors stay authoritative.
+    """
+    if model == CUSTOM_MODEL:
+        return dict(_CUSTOM_CAPS)
     return dict(CAPABILITIES.get(model, _DEFAULT_CAPS))
 
 
@@ -88,6 +101,20 @@ def resolve_size(size: str, custom_width: int, custom_height: int) -> str:
     if size == "custom":
         return validate_custom_dimensions(custom_width, custom_height)
     return size
+
+
+def resolve_model(model: str, custom_name: str = "") -> str:
+    """Resolve the model selector to the id sent to the API.
+
+    CUSTOM_MODEL sends *custom_name* verbatim, so any image model id an
+    OpenAI-compatible endpoint serves can be requested.
+    """
+    if model == CUSTOM_MODEL:
+        name = (custom_name or "").strip()
+        if not name:
+            raise ValueError("model = 'custom' needs a model name")
+        return name
+    return model
 
 
 def resolve_quality(quality: str, model: str) -> str:

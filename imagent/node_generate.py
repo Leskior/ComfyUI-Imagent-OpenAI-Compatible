@@ -49,6 +49,40 @@ def _gpt_image_25_inputs():
     ]
 
 
+def _custom_model_inputs():
+    """Widgets for the 'custom' selector: a free-form model id plus the usual controls.
+
+    An endpoint's capabilities are unknown, so quality/background are not narrowed
+    and the request goes out as configured. `size` keeps the gpt-image list and
+    WxH rules, because the widget still has to offer something.
+    """
+    return [
+        IO.String.Input("model_name", default="",
+                        tooltip="Model id sent to the endpoint, e.g. 'flux-1.1-pro'. "
+                                "Required when model = custom."),
+        _size_combo_gpt2(),
+        IO.Combo.Input("background", options=params_mod.BACKGROUNDS, default="auto",
+                       tooltip="Background handling, sent as-is for a custom model. "
+                               "'transparent' only works if the endpoint supports it."),
+    ]
+
+
+def _base_url_input():
+    return IO.String.Input(
+        "base_url", default="", optional=True,
+        tooltip="Optional. Overrides OPENAI_BASE_URL / config.json for this node. Set it to "
+                "any OpenAI-compatible endpoint, e.g. https://host/v1. Blank falls back to "
+                "the env var, then config.json, then https://api.openai.com/v1.")
+
+
+def _api_key_input():
+    return IO.String.Input(
+        "api_key", default="", optional=True,
+        tooltip="Optional. Overrides OPENAI_API_KEY / config.json for this node. Prefer the "
+                "env var or config.json — a key typed here is saved in the workflow file, "
+                "so it travels with any workflow you share.")
+
+
 def unpack_size(model: dict):
     """Pull (size, custom_width, custom_height) from a model dict.
 
@@ -65,18 +99,22 @@ class OpenAIImageGenerate(IO.ComfyNode):
             node_id="ImagentOpenAIImage",
             display_name="🤖 Imagent: OpenAI Image",
             category="Imagent",
-            description="BYOK text-to-image via OpenAI gpt-image models (direct API, no proxy).",
+            description="BYOK text-to-image via OpenAI gpt-image models or any "
+                        "OpenAI-compatible endpoint (direct API, no proxy).",
             inputs=[
                 IO.String.Input("prompt", multiline=True, default="",
                                 placeholder="Describe the image to generate…",
                                 tooltip="Text description of the image to generate."),
                 IO.DynamicCombo.Input(
                     "model",
-                    tooltip="OpenAI gpt-image model. Switching this changes the options below.",
+                    tooltip="OpenAI gpt-image model, or 'custom' to send any model id to an "
+                            "OpenAI-compatible endpoint. Switching this changes the options "
+                            "below.",
                     options=[
                         IO.DynamicCombo.Option("gpt-image-2.5-flare", _gpt_image_25_inputs()),
                         IO.DynamicCombo.Option("gpt-image-2.5-sunburst", _gpt_image_25_inputs()),
                         IO.DynamicCombo.Option("gpt-image-2", _gpt_image_2_inputs()),
+                        IO.DynamicCombo.Option(params_mod.CUSTOM_MODEL, _custom_model_inputs()),
                     ],
                 ),
                 IO.Combo.Input("quality", options=params_mod.QUALITIES, default="auto",
@@ -92,6 +130,8 @@ class OpenAIImageGenerate(IO.ComfyNode):
                                "'low' (less restrictive). Sent only when not 'auto'."),
                 IO.Int.Input("n", default=1, min=params_mod.N_MIN, max=params_mod.N_MAX, step=1,
                              tooltip="How many images to generate (1-8)."),
+                _base_url_input(),
+                _api_key_input(),
             ],
             outputs=[IO.Image.Output(display_name="image"),
                      IO.Mask.Output(display_name="mask")],
@@ -99,11 +139,12 @@ class OpenAIImageGenerate(IO.ComfyNode):
 
     @classmethod
     def execute(cls, prompt, model, quality, output_format, output_compression,
-                moderation, n) -> IO.NodeOutput:
+                moderation, n, base_url="", api_key="") -> IO.NodeOutput:
         size, custom_width, custom_height = unpack_size(model)
         img, mask, _info = build.run_generate(
-            prompt=prompt, model=model["model"], size=size, quality=quality,
+            prompt=prompt, model=model["model"], model_name=model.get("model_name", ""),
+            size=size, quality=quality,
             background=model["background"], output_format=output_format, n=n,
             moderation=moderation, custom_width=custom_width, custom_height=custom_height,
-            output_compression=output_compression)
+            output_compression=output_compression, api_key=api_key, base_url=base_url)
         return IO.NodeOutput(img, mask)

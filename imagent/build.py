@@ -30,24 +30,36 @@ def _named_png(pil_image: Image.Image, name: str) -> io.BytesIO:
     return buf
 
 
+def _openai_client(api_key: str, base_url: str):
+    """Build the client, forwarding only the overrides the caller actually supplied."""
+    if api_key or base_url:
+        return client_mod.get_client(api_key=api_key, base_url=base_url)
+    return client_mod.get_client()
+
+
 def run_generate(*, prompt, model, size, quality, background, output_format, n,
                  moderation="auto", custom_width=1024, custom_height=1024,
-                 output_compression=100):
+                 output_compression=100, model_name="", api_key="", base_url=""):
     """Text-to-image via images.generate.
+
+    `model` is the node's model selector and `model_name` supplies the id when it
+    is 'custom' (any OpenAI-compatible endpoint). `api_key` / `base_url` override
+    the env var / config.json credentials for this call.
 
     Returns (image_tensor, mask_tensor, info_string); the mask carries the
     alpha channel when background='transparent'. Never raises: a failed call
     yields an empty image plus a friendly error so a bad call can't crash the queue.
     """
-    oai = client_mod.get_client()
+    oai = _openai_client(api_key, base_url)
     if oai is None:
         log.warning("imagent: %s", _NO_KEY)
         return (image_io.empty_image(), image_io.empty_mask(), _NO_KEY)
     try:
+        resolved_model = params_mod.resolve_model(model, model_name)
         resolved_size = params_mod.resolve_size(size, custom_width, custom_height)
         resolved_background = params_mod.resolve_background(background, model)
         kwargs = {
-            "model": model, "prompt": prompt, "n": n,
+            "model": resolved_model, "prompt": prompt, "n": n,
             "size": resolved_size, "quality": params_mod.resolve_quality(quality, model),
             "background": resolved_background, "output_format": output_format,
         }
@@ -59,7 +71,7 @@ def run_generate(*, prompt, model, size, quality, background, output_format, n,
         if not resp.data:
             return (image_io.empty_image(), image_io.empty_mask(), _NO_IMAGES)
         info = getattr(resp.data[0], "revised_prompt", None) \
-            or f"Generated {len(resp.data)} image(s) with {model}."
+            or f"Generated {len(resp.data)} image(s) with {resolved_model}."
         return (*image_io.batch_from_response_data(resp.data), info)
     except Exception as exc:  # noqa: BLE001 - node must not crash the queue
         log.exception("imagent: image generation failed")
@@ -68,13 +80,15 @@ def run_generate(*, prompt, model, size, quality, background, output_format, n,
 
 def run_edit(*, prompt, model, size, quality, background, output_format, n,
              images, mask=None, moderation="auto",
-             custom_width=1024, custom_height=1024):
+             custom_width=1024, custom_height=1024, model_name="", api_key="",
+             base_url=""):
     """Image edit / inpaint / multi-reference via images.edit.
 
-    `images` is an iterable of IMAGE tensors (None entries are ignored).
+    `images` is an iterable of IMAGE tensors (None entries are ignored); `model`,
+    `model_name`, `api_key` and `base_url` behave as in run_generate.
     Returns (image_tensor, mask_tensor, info_string); never raises (see run_generate).
     """
-    oai = client_mod.get_client()
+    oai = _openai_client(api_key, base_url)
     if oai is None:
         log.warning("imagent: %s", _NO_KEY)
         return (image_io.empty_image(), image_io.empty_mask(), _NO_KEY)
@@ -92,6 +106,7 @@ def run_edit(*, prompt, model, size, quality, background, output_format, n,
         return (image_io.empty_image(), image_io.empty_mask(), msg)
 
     try:
+        resolved_model = params_mod.resolve_model(model, model_name)
         resolved_size = params_mod.resolve_size(size, custom_width, custom_height)
         resolved_background = params_mod.resolve_background(background, model)
         # Downscale oversized references to fit the API's input pixel budget.
@@ -99,7 +114,7 @@ def run_edit(*, prompt, model, size, quality, background, output_format, n,
                     for t in refs]
 
         kwargs = {
-            "model": model, "prompt": prompt,
+            "model": resolved_model, "prompt": prompt,
             "image": [_named_png(p, f"ref_{i}.png") for i, p in enumerate(ref_pils)],
             "n": n, "size": resolved_size,
             "quality": params_mod.resolve_quality(quality, model),
@@ -113,7 +128,7 @@ def run_edit(*, prompt, model, size, quality, background, output_format, n,
         if not resp.data:
             return (image_io.empty_image(), image_io.empty_mask(), _NO_IMAGES)
         info = getattr(resp.data[0], "revised_prompt", None) \
-            or f"Edited image with {model}."
+            or f"Edited image with {resolved_model}."
         return (*image_io.batch_from_response_data(resp.data), info)
     except Exception as exc:  # noqa: BLE001 - node must not crash the queue
         log.exception("imagent: image edit failed")
