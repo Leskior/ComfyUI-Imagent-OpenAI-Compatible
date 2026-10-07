@@ -35,16 +35,29 @@
 
 > **Requires ComfyUI ≥ 0.23.0** — the nodes use the `comfy_api` IO schema (`DynamicCombo`) for the per-model UI.
 
-### Option A — ComfyUI Manager (recommended)
-Open **ComfyUI Manager → Custom Nodes Manager**, search for **`Imagent`**, click **Install**, and restart ComfyUI.
+This fork adds OpenAI-compatible endpoint support to
+[ComfyUI-Imagent](https://github.com/agarzon/ComfyUI-Imagent) and is not on the ComfyUI
+Registry, so install it from source:
 
-### Option B — git clone
+### Option A — git clone (recommended)
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/agarzon/ComfyUI-Imagent.git
-pip install -r ComfyUI-Imagent/requirements.txt
+git clone https://github.com/Leskior/ComfyUI-Imagent-OpenAI-Compatible.git
+pip install -r ComfyUI-Imagent-OpenAI-Compatible/requirements.txt
 ```
 Restart ComfyUI.
+
+### Option B — link an existing checkout
+Keeping the checkout outside `custom_nodes` and linking it in makes editing it easier. On Windows:
+
+```powershell
+New-Item -ItemType Junction -Path "C:\path\to\ComfyUI\custom_nodes\comfyui-imagent" -Target "C:\path\to\your\checkout"
+```
+Restart ComfyUI.
+
+> Upstream's node is on **ComfyUI Manager** (search `Imagent`), but that installs the version
+> *without* the OpenAI-compatible endpoint support. Don't install both — they register the same
+> node ids.
 
 ## 🔑 API key & endpoint
 

@@ -22,7 +22,7 @@ dependencies = ["openai>=1.40.0", "Pillow>=10.0", "numpy"]
 test = ["pytest>=8.0", "torch"]
 
 [project.urls]
-Repository = "https://github.com/agarzon/ComfyUI-Imagent"
+Repository = "https://github.com/Leskior/ComfyUI-Imagent-OpenAI-Compatible"
 
 # ComfyUI Registry metadata (used by `comfy node publish`).
 [tool.comfy]
