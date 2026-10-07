@@ -26,11 +26,11 @@ Repository = "https://github.com/Leskior/ComfyUI-Imagent-OpenAI-Compatible"
 
 # ComfyUI Registry metadata (used by `comfy node publish`).
 [tool.comfy]
-PublisherId = "agarzon"
+PublisherId = "Leskior"
 DisplayName = "Imagent"
 requires-comfyui = ">=0.23.0"
-Icon = "https://raw.githubusercontent.com/agarzon/ComfyUI-Imagent/main/assets/icon.png"
-Banner = "https://raw.githubusercontent.com/agarzon/ComfyUI-Imagent/main/assets/banner.png"
+Icon = "https://raw.githubusercontent.com/Leskior/ComfyUI-Imagent-OpenAI-Compatible/main/assets/icon.png"
+Banner = "https://raw.githubusercontent.com/Leskior/ComfyUI-Imagent-OpenAI-Compatible/main/assets/banner.png"
 
 [tool.comfy.version]
 # version is dynamic (imagent.__version__); comfy-cli reads it from this source file
